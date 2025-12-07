@@ -1,4 +1,4 @@
-// DesktopPainter.cpp : Defines the entry point for the application.
+ï»¿// DesktopPainter.cpp : Defines the entry point for the application.
 //
 
 #include "framework.h"
@@ -7,7 +7,9 @@
 #include <shellapi.h>
 #include <vector>
 #include <commctrl.h>
+#include <ShellScalingAPI.h>
 
+#pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "Gdi32.lib")
 #pragma comment(lib, "Shell32.lib")
@@ -24,7 +26,7 @@
 #define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
 #endif
 
-// ¢w¢w¢w Global Vars ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Global Vars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 HINSTANCE hInst;
 WCHAR szTitle[MAX_LOADSTRING];
@@ -34,7 +36,8 @@ const wchar_t CONFIG_WINDOW_CLASS[] = L"DesktopPainterConfigWindow";
 
 const UINT WM_TRAYICON = WM_APP + 1;
 const UINT TIMER_ID_HERE_FADE = 1;
-// ¤u¨ãºØÃş
+
+// å·¥å…·ç¨®é¡
 enum ToolType {
     TOOL_PEN = 0,
     TOOL_ERASER = 1,
@@ -42,7 +45,7 @@ enum ToolType {
 
 ToolType g_tool = TOOL_PEN;
 
-// ¥k¤U¨¤¤u¨ã«ö¶s¦bµe­±¤Wªº¦ì¸m¡]client ®y¼Ğ¡^
+// å³ä¸‹è§’å·¥å…·æŒ‰éˆ•ç¯„åœï¼ˆclient åº§æ¨™ï¼‰
 RECT g_rcBtnPen = { 0, 0, 0, 0 };
 RECT g_rcBtnEraser = { 0, 0, 0, 0 };
 
@@ -55,7 +58,7 @@ enum {
     ID_TRAY_WHERE = 1005,
 };
 
-// µeµ§ÃC¦â¡]Config ¥Î¡^
+// ç•«ç­†é¡è‰²ï¼ˆConfig ç”¨ï¼‰
 enum {
     ID_PEN_COLOR_RED = 2001,
     ID_PEN_COLOR_GREEN = 2002,
@@ -70,12 +73,14 @@ const int PEN_COLOR_LAST = ID_PEN_COLOR_WHITE;
 struct MonitorInfoSimple {
     HMONITOR hMon;
     RECT     rcMonitor;
+    WCHAR    deviceName[CCHDEVICENAME]; // "\\.\DISPLAYx"
+    int      displayNumber;             // Windows é¡¯ç¤ºè¨­å®šçš„ç·¨è™Ÿï¼ˆ1,2,3â€¦ï¼‰
 };
 
 std::vector<MonitorInfoSimple> g_monitors;
 int                            g_currentMonitor = 0;
 
-NOTIFYICONDATAW g_nid = { 0 };
+NOTIFYICONDATAW g_nid{};
 HWND            g_mainWnd = nullptr;
 HWND            g_configWnd = nullptr;
 bool            g_passthrough = false;
@@ -83,32 +88,32 @@ bool            g_passthrough = false;
 int g_canvasWidth = 0;
 int g_canvasHeight = 0;
 
-// Åã¥Ü¼h bitmap¡]UpdateLayeredWindow ¥Î¡^
+// é¡¯ç¤ºå±¤ bitmapï¼ˆUpdateLayeredWindow ç”¨ï¼‰
 HBITMAP g_hBitmap = nullptr;
 BYTE* g_pPixels = nullptr;
 int     g_bmpW = 0;
 int     g_bmpH = 0;
 
-// ¨Ï¥ÎªÌµe¥¬¼h¡GARGB32, size = w*h*4
+// ä½¿ç”¨è€…ç•«å¸ƒå±¤ï¼šARGB32, size = w*h*4
 std::vector<BYTE> g_drawBuf;
 
-// µeµ§³]©w
-int      g_penSize = 4;                    // px, 1~32
-COLORREF g_penColor = RGB(255, 0, 0);       // default red
+// ç•«ç­†è¨­å®š
+int      g_penSize = 4;                 // px, 1~32
+COLORREF g_penColor = RGB(255, 0, 0);    // default red
 
-// HERE ²H¥Xª¬ºA¡]¥u§@¥Î¦bÅã¥Ü¼h¡^
+// HERE æ·¡å‡ºç‹€æ…‹ï¼ˆåªä½œç”¨åœ¨é¡¯ç¤ºå±¤ï¼‰
 bool g_hereActive = false;
-int  g_hereAlpha = 0;      // 0~255
+int  g_hereAlpha = 0;                   // 0~255
 
-// Ã¸¹Ï¥Î tmp
+// ç¹ªåœ–ç”¨ç‹€æ…‹
 bool  g_isDrawing = false;
 POINT g_lastPoint = { 0, 0 };
 
-// Config UI ±±¨î
+// Config UI æ§åˆ¶
 HWND g_hwndPenTrack = nullptr;
 HWND g_hwndPenSizeLabel = nullptr;
 
-// ¢w¢w¢w Forward Decls ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Forward Decls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
@@ -118,34 +123,70 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 void RefreshMonitors();
 void ApplyMonitorToMain(int index);
-
+void PaintMonitorThumbnails(HDC hdcDest, const std::vector<RECT>& rects);
 void AddTrayIcon(HWND hwnd);
 void RemoveTrayIcon(HWND hwnd);
 void ShowTrayMenu(HWND hwnd);
 void ClearCanvas(HWND hwnd);
 void UpdateTrayTip();
 void UpdatePassthrough(HWND hwnd);
+int  ExtractDisplayIndex(const WCHAR* name);
 
 // Canvas / Drawing
 void CreateCanvasBitmap(int w, int h);
 void PresentLayered(HWND hWnd);
 
-// µeµ§ helper¡]µe¦b g_drawBuf¡^
+// ç•«ç­† helperï¼ˆç•«åœ¨ g_drawBufï¼‰
 inline void StampPixelDraw(int x, int y, COLORREF color, BYTE alpha);
 void StampBrushDraw(int x, int y, COLORREF color, BYTE alpha);
 void DrawLineOnDrawBuf(POINT a, POINT b);
 void EraseLineOnDrawBuf(POINT a, POINT b);
 
-// HERE ²H¥X¡]¥uµe¦bÅã¥Ü¼h¡^
+// HERE æ·¡å‡ºï¼ˆåªç•«åœ¨é¡¯ç¤ºå±¤ï¼‰
 void StartHereMarker();
 void UpdateHereMarkerFrame();
 void DrawHereOnDisplay(BYTE alpha);
 void DrawToolButtonsOnDisplay();
-// Config µøµ¡¡G¿Ã¹õÁY¹Ï
+
+// Config è¦–çª—ï¼šè¢å¹•ç¸®åœ–
 void ShowConfigWindow();
 void ComputeMonitorRectsForConfig(HWND hWnd, std::vector<RECT>& outRects);
 
-// ¢w¢w¢w WinMain ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+BOOL InitDpiAwareness();
+
+// â”€â”€â”€ DPI Awareness â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+BOOL InitDpiAwareness()
+{
+    // å„ªå…ˆç”¨ Win10+ Per-Monitor V2
+    HMODULE hUser32 = LoadLibraryW(L"user32.dll");
+    if (hUser32) {
+        using SetDpiCtxFn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+        auto pSetCtx = (SetDpiCtxFn)GetProcAddress(hUser32, "SetProcessDpiAwarenessContext");
+        if (pSetCtx) {
+            if (pSetCtx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+                FreeLibrary(hUser32);
+                return TRUE;
+            }
+        }
+        FreeLibrary(hUser32);
+    }
+
+    // æ¬¡é¸ï¼šPer-Monitor DPI aware (Shcore)
+    HMODULE hShcore = LoadLibraryW(L"Shcore.dll");
+    if (hShcore) {
+        using SetAwarenessFn = HRESULT(WINAPI*)(PROCESS_DPI_AWARENESS);
+        auto pSetAwareness = (SetAwarenessFn)GetProcAddress(hShcore, "SetProcessDpiAwareness");
+        if (pSetAwareness) {
+            pSetAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+        }
+        FreeLibrary(hShcore);
+    }
+
+    return TRUE;
+}
+
+// â”€â”€â”€ WinMain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
@@ -154,6 +195,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+
+    InitDpiAwareness();
 
     INITCOMMONCONTROLSEX icc{};
     icc.dwSize = sizeof(icc);
@@ -180,11 +223,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     return (int)msg.wParam;
 }
 
-// ¢w¢w¢w Window Class Register ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Window Class Register â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    // ¥Dµe¥¬
+    // ä¸»ç•«å¸ƒ
     WNDCLASSEXW wcex{};
     wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.style = CS_HREDRAW | CS_VREDRAW;
@@ -201,7 +244,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     ATOM mainAtom = RegisterClassExW(&wcex);
 
-    // Config µøµ¡
+    // Config è¦–çª—
     WNDCLASSEXW cfg{};
     cfg.cbSize = sizeof(WNDCLASSEX);
     cfg.style = CS_HREDRAW | CS_VREDRAW;
@@ -221,20 +264,42 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     return mainAtom;
 }
 
-// ¢w¢w¢w Monitor Helpers ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Monitor Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC, LPRECT, LPARAM lParam)
 {
     auto vec = reinterpret_cast<std::vector<MonitorInfoSimple>*>(lParam);
-    MONITORINFO mi{};
+
+    MONITORINFOEXW mi{};
     mi.cbSize = sizeof(mi);
     if (GetMonitorInfoW(hMon, &mi)) {
         MonitorInfoSimple info{};
         info.hMon = hMon;
         info.rcMonitor = mi.rcMonitor;
+        wcsncpy_s(info.deviceName, mi.szDevice, _TRUNCATE);
+        info.displayNumber = 0; // ä¹‹å¾Œè§£æ "\\.\DISPLAYx"
         vec->push_back(info);
     }
     return TRUE;
+}
+
+int ExtractDisplayIndex(const WCHAR* name)
+{
+    if (!name) return 0;
+
+    const WCHAR* p = wcsstr(name, L"DISPLAY");
+    if (!p) return 0;
+
+    p += 7; // è·³é "DISPLAY"
+    int  num = 0;
+    bool gotDigit = false;
+
+    while (*p >= L'0' && *p <= L'9') {
+        gotDigit = true;
+        num = num * 10 + (*p - L'0');
+        ++p;
+    }
+    return gotDigit ? num : 0;
 }
 
 void RefreshMonitors()
@@ -250,7 +315,18 @@ void RefreshMonitors()
         info.rcMonitor.top = 0;
         info.rcMonitor.right = GetSystemMetrics(SM_CXSCREEN);
         info.rcMonitor.bottom = GetSystemMetrics(SM_CYSCREEN);
+        info.deviceName[0] = L'\0';
+        info.displayNumber = 1;
         g_monitors.push_back(info);
+    }
+    else {
+        int fallback = 1;
+        for (auto& m : g_monitors) {
+            m.displayNumber = ExtractDisplayIndex(m.deviceName);
+            if (m.displayNumber == 0) {
+                m.displayNumber = fallback++;
+            }
+        }
     }
 
     if (g_currentMonitor >= (int)g_monitors.size())
@@ -268,13 +344,12 @@ void ApplyMonitorToMain(int index)
     int newW = rc.right - rc.left;
     int newH = rc.bottom - rc.top;
 
-    if (newW <= 0 || newH <= 0)
-        return;
+    if (newW <= 0 || newH <= 0) return;
 
     g_canvasWidth = newW;
     g_canvasHeight = newH;
 
-    // ¤£«O¯dÂÂµe­±¡G¾ã±i¯È´«·s
+    // æ–°è¢å¹• â†’ æ•´å¼µç´™æ›æ–°
     CreateCanvasBitmap(newW, newH);
     ClearCanvas(g_mainWnd);
 
@@ -289,7 +364,7 @@ void ApplyMonitorToMain(int index)
     PresentLayered(g_mainWnd);
 }
 
-// ¢w¢w¢w Canvas «Ø¥ß & Clear ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Canvas å»ºç«‹ & Clear â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void CreateCanvasBitmap(int w, int h)
 {
@@ -323,7 +398,7 @@ void CreateCanvasBitmap(int w, int h)
     g_bmpW = w;
     g_bmpH = h;
 
-    // µe¥¬¼h¡G¥ş³¡ ARGB(1,0,0,0)
+    // ç•«å¸ƒå±¤ï¼šå…¨éƒ¨ ARGB(1,0,0,0)
     g_drawBuf.resize((size_t)w * h * 4);
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
@@ -331,7 +406,7 @@ void CreateCanvasBitmap(int w, int h)
             px[0] = 0;
             px[1] = 0;
             px[2] = 0;
-            px[3] = 1;   // «O«ù hit-test
+            px[3] = 1;   // ä¿æŒ hit-test
         }
     }
 }
@@ -357,30 +432,31 @@ void ClearCanvas(HWND hwnd)
     PresentLayered(hwnd);
 }
 
-// ¢w¢w¢w µe¥¬¼h ¡÷ Åã¥Ü¼h + HERE Å|¥[ ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ ç•«å¸ƒå±¤ â†’ é¡¯ç¤ºå±¤ + HERE + å·¥å…·æŒ‰éˆ• â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void PresentLayered(HWND hWnd)
 {
     if (!g_hBitmap || !g_pPixels || g_bmpW <= 0 || g_bmpH <= 0) return;
     if ((int)g_drawBuf.size() < g_bmpW * g_bmpH * 4) return;
 
-    // 1) µe¥¬¼h copy ¨ìÅã¥Ü¼h
+    // 1) ç•«å¸ƒå±¤ copy åˆ°é¡¯ç¤ºå±¤
     memcpy(g_pPixels, g_drawBuf.data(), (size_t)g_bmpW * g_bmpH * 4);
 
-    // 2) HERE Å|¨ìÅã¥Ü¼h
+    // 2) HERE ç–Šåˆ°é¡¯ç¤ºå±¤
     if (g_hereActive && g_hereAlpha > 0) {
         DrawHereOnDisplay((BYTE)g_hereAlpha);
     }
 
+    // 3) å·¥å…·æŒ‰éˆ•ç–Šåˆ°é¡¯ç¤ºå±¤
     DrawToolButtonsOnDisplay();
 
-    // 3) UpdateLayeredWindow
+    // 4) UpdateLayeredWindow
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
 
     HGDIOBJ oldBmp = SelectObject(hdcMem, g_hBitmap);
 
-    RECT rc;
+    RECT  rc;
     GetWindowRect(hWnd, &rc);
     POINT ptDst{ rc.left, rc.top };
     SIZE  size{ g_bmpW, g_bmpH };
@@ -409,7 +485,7 @@ void PresentLayered(HWND hWnd)
     ReleaseDC(nullptr, hdcScreen);
 }
 
-// ¢w¢w¢w µe¥¬¼hµeµ§ helper ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ ç•«å¸ƒå±¤ç•«ç­† helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 inline void StampPixelDraw(int x, int y, COLORREF color, BYTE alpha)
 {
@@ -487,7 +563,7 @@ void EraseLineOnDrawBuf(POINT a, POINT b)
                 px[0] = 0;
                 px[1] = 0;
                 px[2] = 0;
-                px[3] = 1; // ÁÙ­ì¬°´X¥G³z©ú
+                px[3] = 1; // é‚„åŸç‚ºå¹¾ä¹é€æ˜
             }
         }
 
@@ -500,7 +576,7 @@ void EraseLineOnDrawBuf(POINT a, POINT b)
     }
 }
 
-// ¢w¢w¢w HERE ²H¥X¡]¥uµe¦bÅã¥Ü¼h¡^ ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ HERE æ·¡å‡ºï¼ˆåªç•«åœ¨é¡¯ç¤ºå±¤ï¼‰ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void DrawHereOnDisplay(BYTE alpha)
 {
@@ -513,10 +589,8 @@ void DrawHereOnDisplay(BYTE alpha)
 
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
-    int x1 = x0 + boxW;
-    int y1 = y0 + boxH;
-    if (x1 > g_bmpW)  x1 = g_bmpW;
-    if (y1 > g_bmpH)  y1 = g_bmpH;
+    int x1 = min(g_bmpW, x0 + boxW);
+    int y1 = min(g_bmpH, y0 + boxH);
 
     BYTE a = (alpha == 0 ? 1 : alpha);
 
@@ -530,7 +604,7 @@ void DrawHereOnDisplay(BYTE alpha)
         }
     }
 
-    // ¦bÅã¥Ü¼h¤Wµe HERE ¦r¼Ë
+    // åœ¨é¡¯ç¤ºå±¤ä¸Šç•« HERE å­—æ¨£
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HGDIOBJ oldBmp = SelectObject(hdcMem, g_hBitmap);
@@ -540,12 +614,7 @@ void DrawHereOnDisplay(BYTE alpha)
     HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
     HFONT oldFont = (HFONT)SelectObject(hdcMem, hFont);
 
-    RECT rcText;
-    rcText.left = x0;
-    rcText.top = y0;
-    rcText.right = x1;
-    rcText.bottom = y1;
-
+    RECT rcText{ x0, y0, x1, y1 };
     DrawTextW(hdcMem, L"HERE", -1, &rcText,
         DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
@@ -554,11 +623,12 @@ void DrawHereOnDisplay(BYTE alpha)
     DeleteDC(hdcMem);
     ReleaseDC(nullptr, hdcScreen);
 }
+
 void DrawToolButtonsOnDisplay()
 {
     if (!g_pPixels || g_bmpW <= 0 || g_bmpH <= 0) return;
 
-    // ¨âÁû«ö¶s¤j¤p»P¦ì¸m¡]¾a¥k¤U¡^
+    // å…©é¡†æŒ‰éˆ•å¤§å°èˆ‡ä½ç½®ï¼ˆé å³ä¸‹ï¼‰
     const int btnW = 48;
     const int btnH = 48;
     const int padding = 10;
@@ -575,7 +645,6 @@ void DrawToolButtonsOnDisplay()
     int eraserTop = penTop;
 
     if (penLeft < 0 || eraserLeft < 0 || penTop < 0) {
-        // ¤Ó¤p´Nºâ¤F
         SetRectEmpty(&g_rcBtnPen);
         SetRectEmpty(&g_rcBtnEraser);
         return;
@@ -597,6 +666,7 @@ void DrawToolButtonsOnDisplay()
             int y0 = max(0, r.top);
             int x1 = min(g_bmpW, r.right);
             int y1 = min(g_bmpH, r.bottom);
+
             for (int y = y0; y < y1; ++y) {
                 for (int x = x0; x < x1; ++x) {
                     BYTE* px = g_pPixels + (y * g_bmpW + x) * 4;
@@ -608,22 +678,22 @@ void DrawToolButtonsOnDisplay()
             }
         };
 
-    // ­I´º¡G¥Ø«e¤u¨ã°ª«G¡A¥t¤@Áû¥b³z©ú¦Ç
+    // èƒŒæ™¯ï¼šç›®å‰å·¥å…·é«˜äº®ï¼Œå¦ä¸€é¡†åŠé€æ˜ç°
     BYTE baseA = 160;
     BYTE hoverA = 220;
-    BYTE rPen = 0, gPen = 120, bPen = 215; // ÂÅ¨t
-    BYTE rEraser = 80, gEraser = 80, bEraser = 80;  // ¦Ç
+    BYTE rPen = 0, gPen = 120, bPen = 215; // è—ç³»
+    BYTE rEras = 80, gEras = 80, bEras = 80;  // ç°
 
     if (g_tool == TOOL_PEN) {
         fillRectAlpha(g_rcBtnPen, rPen, gPen, bPen, hoverA);
-        fillRectAlpha(g_rcBtnEraser, rEraser, gEraser, bEraser, baseA);
+        fillRectAlpha(g_rcBtnEraser, rEras, gEras, bEras, baseA);
     }
     else {
-        fillRectAlpha(g_rcBtnPen, rEraser, gEraser, bEraser, baseA);
+        fillRectAlpha(g_rcBtnPen, rEras, gEras, bEras, baseA);
         fillRectAlpha(g_rcBtnEraser, rPen, gPen, bPen, hoverA);
     }
 
-    // ¦bÅã¥Ü¼h¤Wµe "P" / "E"
+    // åœ¨é¡¯ç¤ºå±¤ä¸Šç•« "P" / "E"
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HGDIOBJ oldBmp = SelectObject(hdcMem, g_hBitmap);
@@ -668,7 +738,7 @@ void UpdateHereMarkerFrame()
     PresentLayered(g_mainWnd);
 }
 
-// ¢w¢w¢w Tray & Helpers ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Tray & Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void AddTrayIcon(HWND hwnd)
 {
@@ -680,7 +750,7 @@ void AddTrayIcon(HWND hwnd)
     g_nid.uCallbackMessage = WM_TRAYICON;
     g_nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_DESKTOPPAINTER));
 
-    lstrcpyW(g_nid.szTip, L"Desktop Painter (µe¹Ï¼Ò¦¡)");
+    lstrcpyW(g_nid.szTip, L"Desktop Painter (ç•«åœ–æ¨¡å¼)");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 }
 
@@ -697,9 +767,9 @@ void UpdateTrayTip()
     if (g_nid.cbSize == 0) return;
 
     if (g_passthrough)
-        lstrcpyW(g_nid.szTip, L"Desktop Painter (¬ï³z¼Ò¦¡)");
+        lstrcpyW(g_nid.szTip, L"Desktop Painter (ç©¿é€æ¨¡å¼)");
     else
-        lstrcpyW(g_nid.szTip, L"Desktop Painter (µe¹Ï¼Ò¦¡)");
+        lstrcpyW(g_nid.szTip, L"Desktop Painter (ç•«åœ–æ¨¡å¼)");
 
     g_nid.uFlags = NIF_TIP;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
@@ -728,23 +798,23 @@ void ShowTrayMenu(HWND hwnd)
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
 
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_SHOW, L"Åã¥Üµe¥¬");
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CLEAR, L"²M°£µe­±");
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CONFIG, L"³]©w...");
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_WHERE, L"Åã¥Üµe¥¬¦ì¸m");
-    AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"µ²§ô");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_SHOW, L"é¡¯ç¤ºç•«å¸ƒ");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CLEAR, L"æ¸…é™¤ç•«é¢");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_CONFIG, L"è¨­å®š...");
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_WHERE, L"é¡¯ç¤ºç•«å¸ƒä½ç½®");
+    AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"çµæŸ");
 
     SetForegroundWindow(hwnd);
     TrackPopupMenu(hMenu,
         TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
         pt.x, pt.y,
-        0, hwnd, NULL);
+        0, hwnd, nullptr);
 
     DestroyMenu(hMenu);
 }
 
-// ¢w¢w¢w Config Window Helpers ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Config Window Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void ShowConfigWindow()
 {
@@ -754,13 +824,14 @@ void ShowConfigWindow()
         return;
     }
 
-    int width = 640;
-    int height = 480;
+    // è¦–çª—æ”¾å¤§ä¸€é»ï¼Œæ–¹ä¾¿çœ‹ç¸®åœ–
+    int width = 900;
+    int height = 650;
 
     g_configWnd = CreateWindowExW(
         WS_EX_TOOLWINDOW,
         CONFIG_WINDOW_CLASS,
-        L"Desktop Painter ³]©w",
+        L"Desktop Painter è¨­å®š",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
         CW_USEDEFAULT, CW_USEDEFAULT,
         width, height,
@@ -785,10 +856,10 @@ void ComputeMonitorRectsForConfig(HWND hWnd, std::vector<RECT>& outRects)
     int totalW = client.right - client.left;
     int totalH = client.bottom - client.top;
 
-    // ¤W¥b³¡µ¹¿Ã¹õÁY¹Ï¡A¤U¥b³¡µ¹³]©w
+    // ä¸Šæ–¹ 60% ç•¶è¢å¹•é…ç½®å€
     int margin = 10;
     int mapTop = 10;
-    int mapBottom = totalH / 2 + 40; // ¤W¥b + ¤@ÂI buffer
+    int mapBottom = (int)(totalH * 0.6f);
 
     if (mapBottom <= mapTop + margin * 2) return;
 
@@ -796,11 +867,12 @@ void ComputeMonitorRectsForConfig(HWND hWnd, std::vector<RECT>& outRects)
     int availH = (mapBottom - mapTop) - margin * 2;
     if (availW <= 0 || availH <= 0) return;
 
-    // µêÀÀ®à­± bounding box
+    // è™›æ“¬æ¡Œé¢ bounding box
     int minX = g_monitors[0].rcMonitor.left;
     int minY = g_monitors[0].rcMonitor.top;
     int maxX = g_monitors[0].rcMonitor.right;
     int maxY = g_monitors[0].rcMonitor.bottom;
+
     for (auto& m : g_monitors) {
         if (m.rcMonitor.left < minX) minX = m.rcMonitor.left;
         if (m.rcMonitor.top < minY) minY = m.rcMonitor.top;
@@ -812,12 +884,15 @@ void ComputeMonitorRectsForConfig(HWND hWnd, std::vector<RECT>& outRects)
     int vH = maxY - minY;
     if (vW <= 0 || vH <= 0) return;
 
+    // ç­‰æ¯”ç¸®æ”¾
     float sx = (float)availW / (float)vW;
     float sy = (float)availH / (float)vH;
     float scale = (sx < sy ? sx : sy);
 
     int scaledW = (int)(vW * scale);
     int scaledH = (int)(vH * scale);
+
+    // ç½®ä¸­ï¼šåœ¨é…ç½®å€ï¼ˆmargin ~ totalW-margin, mapTop+margin ~ mapBottom-marginï¼‰è£¡ç½®ä¸­
     int offsetX = margin + (availW - scaledW) / 2;
     int offsetY = mapTop + margin + (availH - scaledH) / 2;
 
@@ -831,7 +906,88 @@ void ComputeMonitorRectsForConfig(HWND hWnd, std::vector<RECT>& outRects)
     }
 }
 
-// ¢w¢w¢w Config WndProc ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+
+// ç¸®åœ–ç¹ªè£½ context & callbackï¼ˆæŠ“çœŸå¯¦æ¡Œé¢å…§å®¹ï¼‰
+
+struct MonitorPaintContext
+{
+    HDC* pHdcDest; // Config è¦–çª—çš„ HDC
+    std::vector<RECT>* pRects;   // ComputeMonitorRectsForConfig ç®—å‡ºçš„ç¸®åœ–å€
+};
+
+BOOL CALLBACK MonitorThumbPaintProc(HMONITOR hMon, HDC hdcMon, LPRECT lprcMon, LPARAM lParam)
+{
+    auto* ctx = reinterpret_cast<MonitorPaintContext*>(lParam);
+    if (!ctx || !ctx->pHdcDest || !ctx->pRects) return TRUE;
+
+    HDC hdcDest = *(ctx->pHdcDest);
+    if (!hdcDest) return TRUE;
+
+    // æ‰¾å‡ºé€™å€‹ HMONITOR åœ¨ g_monitors è£¡çš„ index
+    int idx = -1;
+    for (size_t i = 0; i < g_monitors.size(); ++i) {
+        if (g_monitors[i].hMon == hMon) {
+            idx = (int)i;
+            break;
+        }
+    }
+    if (idx < 0 || idx >= (int)ctx->pRects->size()) return TRUE;
+
+    RECT destRect = (*ctx->pRects)[idx];
+
+    int srcW = lprcMon->right - lprcMon->left;
+    int srcH = lprcMon->bottom - lprcMon->top;
+    if (srcW <= 0 || srcH <= 0) return TRUE;
+
+    // hdcMon å·²ç¶“æ˜¯è©²è¢å¹•è¢«å‰ªè£éçš„ DCï¼Œ(0,0) å³è¢å¹•å·¦ä¸Šè§’
+    StretchBlt(
+        hdcDest,
+        destRect.left,
+        destRect.top,
+        destRect.right - destRect.left,
+        destRect.bottom - destRect.top,
+        hdcMon,
+        0, 0,
+        srcW, srcH,
+        SRCCOPY
+    );
+
+    return TRUE;
+}
+void PaintMonitorThumbnails(HDC hdcDest, const std::vector<RECT>& rects)
+{
+    if (rects.size() != g_monitors.size()) return;
+
+    // å–å¾—æ•´å€‹è™›æ“¬æ¡Œé¢çš„åƒç´  DC
+    HDC hdcScreen = GetDC(NULL);
+
+    for (size_t i = 0; i < g_monitors.size(); ++i)
+    {
+        const RECT& rDraw = rects[i];          // config ä¸Šçš„ç¹ªè£½å€
+        const RECT& rMon = g_monitors[i].rcMonitor; // çœŸå¯¦åƒç´ åº§æ¨™
+
+        int srcW = rMon.right - rMon.left;
+        int srcH = rMon.bottom - rMon.top;
+
+        if (srcW <= 0 || srcH <= 0) continue;
+
+        // å°‡è¢å¹•çš„é‚£ä¸€å¡Šç›´æ¥ç¸®æ”¾åˆ° config è£¡
+        StretchBlt(
+            hdcDest,
+            rDraw.left, rDraw.top,
+            rDraw.right - rDraw.left,
+            rDraw.bottom - rDraw.top,
+            hdcScreen,
+            rMon.left, rMon.top,   // <<< çœŸå¯¦ä¾†æºåº§æ¨™ï¼ˆåƒç´ ï¼‰
+            srcW, srcH,
+            SRCCOPY
+        );
+    }
+
+    ReleaseDC(NULL, hdcScreen);
+}
+
+// â”€â”€â”€ Config WndProc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -846,34 +1002,33 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         int totalW = rcClient.right - rcClient.left;
         int totalH = rcClient.bottom - rcClient.top;
 
-        // ÃC¦â group
-        int groupColorY = totalH - 160;
+        // é¡è‰² group
+        int groupColorY = totalH - 180;
         HWND hGroupColor = CreateWindowW(
-            L"BUTTON", L"µeµ§ÃC¦â",
+            L"BUTTON", L"ç•«ç­†é¡è‰²",
             WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-            10, groupColorY, totalW - 20, 70,
+            10, groupColorY, totalW - 20, 80,
             hWnd, nullptr, hInst, nullptr);
-
         UNREFERENCED_PARAMETER(hGroupColor);
 
-        int colorX = 20, colorY = groupColorY + 20, colorW = 80, colorH = 20;
-        CreateWindowW(L"BUTTON", L"¬õ¦â",
+        int colorX = 20, colorY = groupColorY + 25, colorW = 80, colorH = 20;
+        CreateWindowW(L"BUTTON", L"ç´…è‰²",
             WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
             colorX, colorY, colorW, colorH,
             hWnd, (HMENU)ID_PEN_COLOR_RED, hInst, nullptr);
-        CreateWindowW(L"BUTTON", L"ºñ¦â",
+        CreateWindowW(L"BUTTON", L"ç¶ è‰²",
             WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
             colorX + 90, colorY, colorW, colorH,
             hWnd, (HMENU)ID_PEN_COLOR_GREEN, hInst, nullptr);
-        CreateWindowW(L"BUTTON", L"ÂÅ¦â",
+        CreateWindowW(L"BUTTON", L"è—è‰²",
             WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
             colorX + 180, colorY, colorW, colorH,
             hWnd, (HMENU)ID_PEN_COLOR_BLUE, hInst, nullptr);
-        CreateWindowW(L"BUTTON", L"¶À¦â",
+        CreateWindowW(L"BUTTON", L"é»ƒè‰²",
             WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
             colorX, colorY + 25, colorW, colorH,
             hWnd, (HMENU)ID_PEN_COLOR_YELLOW, hInst, nullptr);
-        CreateWindowW(L"BUTTON", L"¥Õ¦â",
+        CreateWindowW(L"BUTTON", L"ç™½è‰²",
             WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
             colorX + 90, colorY + 25, colorW, colorH,
             hWnd, (HMENU)ID_PEN_COLOR_WHITE, hInst, nullptr);
@@ -886,9 +1041,9 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         CheckRadioButton(hWnd, PEN_COLOR_FIRST, PEN_COLOR_LAST, defaultColorId);
 
-        // ²Ê²Ó Label + Trackbar
-        int labelY = totalH - 80;
-        int trackY = labelY + 20;
+        // ç²—ç´° Label + Trackbar
+        int labelY = totalH - 90;
+        int trackY = labelY + 22;
         int trackX = 20;
         int trackW = totalW - 40;
 
@@ -899,7 +1054,7 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             hWnd, nullptr, hInst, nullptr);
 
         wchar_t buf[64];
-        wsprintfW(buf, L"µeµ§²Ê²Ó¡G%d px (1 ~ 32)", g_penSize);
+        wsprintfW(buf, L"ç•«ç­†ç²—ç´°ï¼š%d px (1 ~ 32)", g_penSize);
         SetWindowTextW(g_hwndPenSizeLabel, buf);
 
         g_hwndPenTrack = CreateWindowExW(
@@ -921,14 +1076,14 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     {
         int id = LOWORD(wParam);
 
-        // ÃC¦â
+        // é¡è‰²
         if (id >= PEN_COLOR_FIRST && id <= PEN_COLOR_LAST) {
             CheckRadioButton(hWnd, PEN_COLOR_FIRST, PEN_COLOR_LAST, id);
             switch (id) {
             case ID_PEN_COLOR_RED:    g_penColor = RGB(255, 0, 0);   break;
             case ID_PEN_COLOR_GREEN:  g_penColor = RGB(0, 255, 0);   break;
             case ID_PEN_COLOR_BLUE:   g_penColor = RGB(0, 0, 255);   break;
-            case ID_PEN_COLOR_YELLOW: g_penColor = RGB(255, 255, 0);  break;
+            case ID_PEN_COLOR_YELLOW: g_penColor = RGB(255, 255, 0); break;
             case ID_PEN_COLOR_WHITE:  g_penColor = RGB(255, 255, 255); break;
             }
             return 0;
@@ -948,7 +1103,7 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             if (g_hwndPenSizeLabel) {
                 wchar_t buf[64];
-                wsprintfW(buf, L"µeµ§²Ê²Ó¡G%d px (1 ~ 32)", g_penSize);
+                wsprintfW(buf, L"ç•«ç­†ç²—ç´°ï¼š%d px (1 ~ 32)", g_penSize);
                 SetWindowTextW(g_hwndPenSizeLabel, buf);
             }
         }
@@ -967,7 +1122,7 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (PtInRect(&rects[i], POINT{ x, y })) {
                 ApplyMonitorToMain((int)i);
                 g_currentMonitor = (int)i;
-                InvalidateRect(hWnd, NULL, TRUE);
+                InvalidateRect(hWnd, nullptr, TRUE);
                 break;
             }
         }
@@ -982,53 +1137,41 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         std::vector<RECT> rects;
         ComputeMonitorRectsForConfig(hWnd, rects);
 
-        HDC hdcScreen = GetDC(nullptr);
-
-        for (size_t i = 0; i < rects.size(); ++i) {
-            RECT r = rects[i];
-
-            // ­I´º
-            HBRUSH brush = CreateSolidBrush(RGB(40, 40, 40));
-            FillRect(hdc, &r, brush);
-            DeleteObject(brush);
-
-            // ¿Ã¹õÁY¹Ï
-            MonitorInfoSimple& m = g_monitors[i];
-            int monW = m.rcMonitor.right - m.rcMonitor.left;
-            int monH = m.rcMonitor.bottom - m.rcMonitor.top;
-            if (monW > 0 && monH > 0) {
-                StretchBlt(
-                    hdc,
-                    r.left, r.top, r.right - r.left, r.bottom - r.top,
-                    hdcScreen,
-                    m.rcMonitor.left, m.rcMonitor.top, monW, monH,
-                    SRCCOPY
-                );
-            }
-
-            // ¥~®Ø
-            HPEN pen = CreatePen(
-                i == (size_t)g_currentMonitor ? PS_SOLID : PS_DOT,
-                i == (size_t)g_currentMonitor ? 3 : 1,
-                RGB(0, 120, 215)
-            );
-            HPEN oldPen = (HPEN)SelectObject(hdc, pen);
-            HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
-            Rectangle(hdc, r.left, r.top, r.right, r.bottom);
-            SelectObject(hdc, oldBrush);
-            SelectObject(hdc, oldPen);
-            DeleteObject(pen);
-
-            // ½s¸¹
-            wchar_t text[16];
-            wsprintfW(text, L"%d", (int)i + 1);
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            DrawTextW(hdc, text, -1, &r,
-                DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        // ç°è‰²åº•
+        for (auto& r : rects) {
+            HBRUSH b = CreateSolidBrush(RGB(40, 40, 40));
+            FillRect(hdc, &r, b);
+            DeleteObject(b);
         }
 
-        ReleaseDC(nullptr, hdcScreen);
+        // ğŸ”¥ ä½¿ç”¨çœŸå¯¦åƒç´ åº§æ¨™æŠ“ç¸®åœ–ï¼ˆå–ä»£ EnumDisplayMonitorsï¼‰
+        PaintMonitorThumbnails(hdc, rects);
+
+        // æ¡†ç·š + æ•¸å­—
+        for (size_t i = 0; i < rects.size(); ++i) {
+            RECT r = rects[i];
+            HPEN pen = CreatePen(
+                i == g_currentMonitor ? PS_SOLID : PS_DOT,
+                i == g_currentMonitor ? 3 : 1,
+                RGB(0, 120, 215)
+            );
+            HPEN old = (HPEN)SelectObject(hdc, pen);
+            HBRUSH oldBr = (HBRUSH)SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
+
+            Rectangle(hdc, r.left, r.top, r.right, r.bottom);
+
+            SelectObject(hdc, oldBr);
+            SelectObject(hdc, old);
+            DeleteObject(pen);
+
+            // é¡¯ç¤º DISPLAY æ•¸å­—ï¼ˆçœŸå¯¦ Windows mappingï¼‰
+            wchar_t buf[16];
+            wsprintfW(buf, L"%d", g_monitors[i].displayNumber);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, RGB(255, 255, 255));
+            DrawTextW(hdc, buf, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+
         EndPaint(hWnd, &ps);
     }
     break;
@@ -1048,7 +1191,7 @@ LRESULT CALLBACK ConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     return 0;
 }
 
-// ¢w¢w¢w InitInstance ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ InitInstance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -1090,7 +1233,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     AddTrayIcon(hWnd);
 
     if (!RegisterHotKey(hWnd, 1, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'D')) {
-        MessageBoxW(hWnd, L"µù¥U¼öÁä Ctrl+Alt+D ¥¢±Ñ", L"Hotkey", MB_ICONWARNING);
+        MessageBoxW(hWnd, L"è¨»å†Šç†±éµ Ctrl+Alt+D å¤±æ•—", L"Hotkey", MB_ICONWARNING);
     }
 
     g_passthrough = false;
@@ -1100,7 +1243,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     return TRUE;
 }
 
-// ¢w¢w¢w Main Overlay WndProc ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ Main Overlay WndProc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1146,15 +1289,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_ERASEBKGND:
         return 1;
 
-        // ¥ªÁäµe½u
+        // å·¦éµï¼šç•«ç­† / å·¥å…·æŒ‰éˆ•
     case WM_LBUTTONDOWN:
     {
-        POINT p = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        POINT p{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
-        // ¥ı¬İ¦³¨S¦³ÂI¨ì¤u¨ã«ö¶s
+        // å…ˆçœ‹æœ‰æ²’æœ‰é»åˆ°å·¥å…·æŒ‰éˆ•
         if (PtInRect(&g_rcBtnPen, p)) {
             g_tool = TOOL_PEN;
-            PresentLayered(hWnd); // Åı«ö¶s°ª«G§ó·s
+            PresentLayered(hWnd);
             break;
         }
         if (PtInRect(&g_rcBtnEraser, p)) {
@@ -1166,14 +1309,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (!g_passthrough) {
             g_isDrawing = true;
             SetCapture(hWnd);
-
             g_lastPoint = p;
-            if (g_tool == TOOL_PEN) {
+
+            if (g_tool == TOOL_PEN)
                 DrawLineOnDrawBuf(p, p);
-            }
-            else { // ¾ó¥ÖÀ¿
+            else
                 EraseLineOnDrawBuf(p, p);
-            }
+
             PresentLayered(hWnd);
         }
     }
@@ -1181,20 +1323,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_MOUSEMOVE:
         if (!g_passthrough && g_isDrawing) {
-            POINT p = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            POINT p{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
             if (wParam & MK_LBUTTON) {
-                if (g_tool == TOOL_PEN) {
+                if (g_tool == TOOL_PEN)
                     DrawLineOnDrawBuf(g_lastPoint, p);
-                }
-                else {
+                else
                     EraseLineOnDrawBuf(g_lastPoint, p);
-                }
+
                 g_lastPoint = p;
                 PresentLayered(hWnd);
             }
             else if (wParam & MK_RBUTTON) {
-                // ¥kÁä¤@«ß·í¾ó¥ÖÀ¿¡]«O¯d­ì¥»¦æ¬°¡^
+                // å³éµä¸€å¾‹ç•¶æ©¡çš®æ“¦
                 EraseLineOnDrawBuf(g_lastPoint, p);
                 g_lastPoint = p;
                 PresentLayered(hWnd);
@@ -1209,13 +1350,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
 
-        // ¥kÁä¾ó¥ÖÀ¿
+        // å³éµï¼šæ©¡çš®æ“¦
     case WM_RBUTTONDOWN:
         if (!g_passthrough) {
             g_isDrawing = true;
             SetCapture(hWnd);
 
-            POINT p = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            POINT p{ GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
             g_lastPoint = p;
             EraseLineOnDrawBuf(p, p);
             PresentLayered(hWnd);
@@ -1283,7 +1424,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-// ¢w¢w¢w About Dialog¡]¼ÒªO­ì¼Ë«O¯d¡^ ¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w
+// â”€â”€â”€ About Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
